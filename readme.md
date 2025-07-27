@@ -1,4 +1,4 @@
-# Elys
+# Ely
 
 **Elys** is a blockchain built using Cosmos SDK and CometBFT. It is designed to be a fast, scalable, and secure blockchain that can be used to build decentralized applications.
 
