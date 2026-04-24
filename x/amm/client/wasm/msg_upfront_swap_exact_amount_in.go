@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	errorsmod "cosmossdk.io/errors"
-	wasmvmtypes "github.com/CosmWasm/wasmvm/v2/types"
+	wasmvmtypes "github.com/CosmWasm/wasmvm/v3/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ammkeeper "github.com/elys-network/elys/v6/x/amm/keeper"
 	ammtypes "github.com/elys-network/elys/v6/x/amm/types"

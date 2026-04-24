@@ -3,7 +3,6 @@ package keepers
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
@@ -13,7 +12,6 @@ import (
 	feegrantkeeper "cosmossdk.io/x/feegrant/keeper"
 	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
-	"github.com/CosmWasm/wasmd/x/wasm"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -48,33 +46,38 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward"
-	packetforwardkeeper "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward/keeper"
-	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward/types"
-	ibchooks "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8"
-	ibchookskeeper "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8/keeper"
-	ibchookstypes "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8/types"
+	"github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward"
+	packetforwardkeeper "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward/keeper"
+	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward/types"
 	capabilitykeeper "github.com/cosmos/ibc-go/modules/capability/keeper"
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
-	icacontroller "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller"
-	icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
-	icacontrollertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
-	icahost "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host"
-	icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
-	icahosttypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
-	"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
-	ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
-	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
-	ibcconnectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
-	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
-	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
-	ccvconsumer "github.com/cosmos/interchain-security/v6/x/ccv/consumer"
-	ccvconsumerkeeper "github.com/cosmos/interchain-security/v6/x/ccv/consumer/keeper"
-	ccvconsumertypes "github.com/cosmos/interchain-security/v6/x/ccv/consumer/types"
-	ccv "github.com/cosmos/interchain-security/v6/x/ccv/types"
-	wasmbindingsclient "github.com/elys-network/elys/v6/wasmbindings/client"
+	icacontroller "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller"
+	icacontrollerkeeper "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/keeper"
+	icacontrollertypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/types"
+	icahost "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host"
+	icahostkeeper "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host/keeper"
+	icahosttypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host/types"
+	"github.com/cosmos/ibc-go/v10/modules/apps/transfer"
+	ibctransferkeeper "github.com/cosmos/ibc-go/v10/modules/apps/transfer/keeper"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	ibcclienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	ibcconnectiontypes "github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
+	ccvconsumer "github.com/cosmos/interchain-security/v7/x/ccv/consumer"
+	ccvconsumerkeeper "github.com/cosmos/interchain-security/v7/x/ccv/consumer/keeper"
+	ccvconsumertypes "github.com/cosmos/interchain-security/v7/x/ccv/consumer/types"
+	ccv "github.com/cosmos/interchain-security/v7/x/ccv/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+
+	feemarketkeeper "github.com/cosmos/evm/x/feemarket/keeper"
+	feemarkettypes "github.com/cosmos/evm/x/feemarket/types"
+	evmkeeper "github.com/cosmos/evm/x/vm/keeper"
+	evmtypes "github.com/cosmos/evm/x/vm/types"
+
+	"github.com/elys-network/elys/v6/app/precompiles"
 	accountedpoolmodulekeeper "github.com/elys-network/elys/v6/x/accountedpool/keeper"
 	accountedpoolmoduletypes "github.com/elys-network/elys/v6/x/accountedpool/types"
 	ammmodulekeeper "github.com/elys-network/elys/v6/x/amm/keeper"
@@ -132,7 +135,6 @@ type AppKeepers struct {
 
 	// IBC Keeper must be a pointer in the app, so we can SetRouter on it correctly
 	IBCKeeper             *ibckeeper.Keeper
-	IBCHooksKeeper        *ibchookskeeper.Keeper
 	ICAHostKeeper         icahostkeeper.Keeper
 	ICAControllerKeeper   icacontrollerkeeper.Keeper
 	EvidenceKeeper        evidencekeeper.Keeper
@@ -140,7 +142,11 @@ type AppKeepers struct {
 	FeeGrantKeeper        feegrantkeeper.Keeper
 	AuthzKeeper           authzkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
-	GroupKeeper           groupkeeper.Keeper
+
+	// EVM keepers
+	FeeMarketKeeper feemarketkeeper.Keeper
+	EVMKeeper       *evmkeeper.Keeper
+	GroupKeeper     groupkeeper.Keeper
 
 	ConsumerKeeper ccvconsumerkeeper.Keeper
 	ConsumerModule ccvconsumer.AppModule // Have to declare this here for IBC router
@@ -175,8 +181,6 @@ type AppKeepers struct {
 	TierKeeper          *tiermodulekeeper.Keeper
 	TradeshieldKeeper   tradeshieldmodulekeeper.Keeper
 
-	HooksICS4Wrapper    ibchooks.ICS4Middleware
-	Ics20WasmHooks      *ibchooks.WasmHooks
 	PacketForwardKeeper *packetforwardkeeper.Keeper
 
 	ICSValidatorKeeper ICSValidatorKeeper
@@ -314,6 +318,15 @@ func NewAppKeeper(
 		authcodec.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
 	)
 
+	// Initialize EVM keepers in correct order
+	// 1) Fee market for EIP-1559 style fees
+	app.FeeMarketKeeper = feemarketkeeper.NewKeeper(
+		appCodec,
+		authtypes.NewModuleAddress(govtypes.ModuleName),
+		app.keys[feemarkettypes.StoreKey],
+		app.tkeys[feemarkettypes.TransientKey],
+	)
+
 	app.AssetprofileKeeper = *assetprofilemodulekeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(app.keys[assetprofilemoduletypes.StoreKey]),
@@ -389,133 +402,144 @@ func NewAppKeeper(
 	app.ConsumerKeeper = ccvconsumerkeeper.NewNonZeroKeeper(
 		appCodec,
 		app.keys[ccvconsumertypes.StoreKey],
-		app.GetSubspace(ccvconsumertypes.ModuleName),
 	)
 
 	// UpgradeKeeper must be created before IBCKeeper
 	app.IBCKeeper = ibckeeper.NewKeeper(
 		appCodec,
-		app.keys[ibcexported.StoreKey],
+		runtime.NewKVStoreService(app.keys[ibcexported.StoreKey]),
 		app.GetSubspace(ibcexported.ModuleName),
-		&app.ConsumerKeeper,
 		app.UpgradeKeeper,
-		app.ScopedIBCKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	// Configure the hooks keeper
-	hooksKeeper := ibchookskeeper.NewKeeper(
-		app.keys[ibchookstypes.StoreKey],
-	)
-	app.IBCHooksKeeper = &hooksKeeper
-
-	wasmHooks := ibchooks.NewWasmHooks(app.IBCHooksKeeper, &app.WasmKeeper, AccountAddressPrefix)
-	app.Ics20WasmHooks = &wasmHooks
-	app.HooksICS4Wrapper = ibchooks.NewICS4Middleware(
-		app.IBCKeeper.ChannelKeeper,
-		app.Ics20WasmHooks,
-	)
+	// Native IBC v10 callbacks will be configured in the transfer stack below
 
 	transferKeeper := ibctransferkeeper.NewKeeper(
 		appCodec,
-		app.keys[ibctransfertypes.StoreKey],
+		runtime.NewKVStoreService(app.keys[ibctransfertypes.StoreKey]),
 		app.GetSubspace(ibctransfertypes.ModuleName),
-		app.IBCKeeper.ChannelKeeper, // ISC4 Wrapper: This is overridden later
+		app.IBCKeeper.ChannelKeeper, // ICS4Wrapper will be set later in transfer stack
 		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
+		bApp.MsgServiceRouter(),
 		app.AccountKeeper,
 		app.BankKeeper,
-		app.ScopedTransferKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 	app.TransferKeeper = &transferKeeper
 
+	// 2) Create EVM-compatible account keeper wrapper
+	evmAccountKeeper := NewEVMAccountKeeper(app.AccountKeeper)
+
+	// 3) Core EVM keeper
+	fmt.Printf("🔧 Creating EVM keeper...\n")
+	app.EVMKeeper = evmkeeper.NewKeeper(
+		appCodec,
+		app.keys[evmtypes.StoreKey],
+		app.tkeys[evmtypes.TransientKey],
+		app.GetKVStoreKeys(),
+		authtypes.NewModuleAddress(govtypes.ModuleName),
+		evmAccountKeeper,
+		app.BankKeeper,
+		app.StakingKeeper,
+		app.FeeMarketKeeper,
+		app.ConsensusParamsKeeper,
+		nil, // no erc20 keeper (ELYS-EVM doesn't need it)
+		"",  // tracer
+	)
+	fmt.Printf("✅ EVM keeper created successfully\n")
+
+	// Enable universal bank wrapper precompiles
+	// Configure EVM precompiles directly (avoiding import cycle)
+	fmt.Printf("🔧 Setting up precompiles...\n")
+	// Clone the mapping from the latest EVM fork.
+	staticPrecompiles := make(map[common.Address]vm.PrecompiledContract)
+
+	// Copy Berlin precompiles as base
+	for addr, contract := range vm.PrecompiledContractsBerlin {
+		staticPrecompiles[addr] = contract
+		fmt.Printf("   ✅ Added Berlin precompile: %s\n", addr.Hex())
+	}
+
+	// Add our custom bank precompile for universal bank operations
+	fmt.Printf("🔧 Creating bank precompile...\n")
+	bankPrecompile, err := precompiles.NewBankPrecompile(app.BankKeeper)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create bank precompile: %v", err))
+	}
+	staticPrecompiles[bankPrecompile.Address()] = bankPrecompile
+	fmt.Printf("   ✅ Added bank precompile: %s\n", bankPrecompile.Address().Hex())
+
+	// Add factory precompile for CREATE2 wrapper deployment
+	fmt.Printf("🔧 Creating wrapper factory precompile...\n")
+	factoryPrecompile := precompiles.NewWrapperFactoryPrecompile(app.AssetprofileKeeper)
+	staticPrecompiles[factoryPrecompile.Address()] = factoryPrecompile
+	fmt.Printf("   ✅ Added factory precompile: %s\n", factoryPrecompile.Address().Hex())
+
+	// Configure EVM keeper with precompiles
+	fmt.Printf("🔧 Registering %d total precompiles with EVM keeper...\n", len(staticPrecompiles))
+	app.EVMKeeper.WithStaticPrecompiles(staticPrecompiles)
+	fmt.Printf("✅ All precompiles registered successfully\n")
+
 	app.PacketForwardKeeper = packetforwardkeeper.NewKeeper(
 		appCodec,
-		app.keys[packetforwardtypes.StoreKey],
+		runtime.NewKVStoreService(app.keys[packetforwardtypes.StoreKey]),
 		app.TransferKeeper,
 		app.IBCKeeper.ChannelKeeper,
 		app.BankKeeper,
-		// The ICS4Wrapper is replaced by the HooksICS4Wrapper instead of the channel so that sending can be overridden by the middleware
-		app.HooksICS4Wrapper,
+		// Use the channel keeper directly - callbacks will be handled in the transfer stack
+		app.IBCKeeper.ChannelKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
 	app.ICAHostKeeper = icahostkeeper.NewKeeper(
 		appCodec,
-		app.keys[icahosttypes.StoreKey],
+		runtime.NewKVStoreService(app.keys[icahosttypes.StoreKey]),
 		app.GetSubspace(icahosttypes.SubModuleName),
 		app.IBCKeeper.ChannelKeeper, // ICS4Wrapper
 		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
 		app.AccountKeeper,
-		app.ScopedICAHostKeeper,
 		bApp.MsgServiceRouter(),
+		bApp.GRPCQueryRouter(),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
-
-	// required since ibc-go v7.5.0
-	app.ICAHostKeeper.WithQueryRouter(bApp.GRPCQueryRouter())
 
 	app.ICAControllerKeeper = icacontrollerkeeper.NewKeeper(
 		appCodec,
-		app.keys[icacontrollertypes.StoreKey],
+		runtime.NewKVStoreService(app.keys[icacontrollertypes.StoreKey]),
 		app.GetSubspace(icacontrollertypes.SubModuleName),
 		app.IBCKeeper.ChannelKeeper, // ICS4Wrapper
 		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
-		app.ScopedICAControllerKeeper,
 		bApp.MsgServiceRouter(),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	wasmDir := filepath.Join(homePath, "wasm")
-	wasmConfig, err := wasm.ReadWasmConfig(appOpts)
-	if err != nil {
-		panic(fmt.Sprintf("error while reading wasm config: %s", err))
-	}
+	// wasmDir := filepath.Join(homePath, "wasm")
+	// wasmConfig, err := wasm.ReadNodeConfig(appOpts)
+	// if err != nil {
+	// 	panic(fmt.Sprintf("error while reading wasm config: %s", err))
+	// }
 
-	bankKeeper := app.BankKeeper.(bankkeeper.BaseKeeper)
-	wasmOpts = append(
-		wasmbindingsclient.RegisterCustomPlugins(
-			app.AmmKeeper,
-			&app.AccountKeeper,
-			&bankKeeper,
-		),
-		wasmOpts...,
-	)
-	wasmOpts = append(wasmbindingsclient.RegisterStargateQueries(*bApp.GRPCQueryRouter(), appCodec), wasmOpts...)
+	// bankKeeper := app.BankKeeper.(bankkeeper.BaseKeeper)
+	// wasmOpts = append(
+	// 	wasmbindingsclient.RegisterCustomPlugins(
+	// 		app.AmmKeeper,
+	// 		&app.AccountKeeper,
+	// 		&bankKeeper,
+	// 	),
+	// 	wasmOpts...,
+	// )
+	// wasmOpts = append(wasmbindingsclient.RegisterStargateQueries(*bApp.GRPCQueryRouter(), appCodec), wasmOpts...)
 
-	// The last arguments can contain custom message handlers, and custom query handlers,
-	// if we want to allow any custom callbacks
-	app.WasmKeeper = wasmkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(app.keys[wasmTypes.StoreKey]),
-		app.AccountKeeper,
-		app.BankKeeper,
-		app.StakingKeeper,
-		distrkeeper.NewQuerier(app.DistrKeeper),
-		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
-		app.ScopedWasmKeeper,
-		app.TransferKeeper,
-		bApp.MsgServiceRouter(),
-		bApp.GRPCQueryRouter(),
-		wasmDir,
-		wasmConfig,
-		wasmkeeper.BuiltInCapabilities(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		wasmOpts...,
-	)
+	// TODO: Fix WASM keeper interface compatibility with IBC v10
+	// WASM integration requires more complex interface bridging for IBC v10
+	// Temporarily initialize empty keeper to allow core IBC v10 functionality to work
+	app.WasmKeeper = wasmkeeper.Keeper{}
 
 	app.ConsumerKeeper = ccvconsumerkeeper.NewKeeper(
 		appCodec,
 		app.keys[ccvconsumertypes.StoreKey],
-		app.GetSubspace(ccvconsumertypes.ModuleName),
-		app.ScopedCCVConsumerKeeper,
 		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
 		app.IBCKeeper.ConnectionKeeper,
 		app.IBCKeeper.ClientKeeper,
 		app.SlashingKeeper,
@@ -755,7 +779,8 @@ func NewAppKeeper(
 
 	var transferStack porttypes.IBCModule
 	transferStack = transfer.NewIBCModule(*app.TransferKeeper)
-	transferStack = ibchooks.NewIBCMiddleware(transferStack, &app.HooksICS4Wrapper)
+	// Add native IBC v10 callbacks middleware if needed
+	// transferStack = ibccallbacks.NewIBCMiddleware(transferStack, app.IBCKeeper.ChannelKeeper, maxCallbackGas)
 	transferStack = packetforward.NewIBCMiddleware(
 		transferStack,
 		app.PacketForwardKeeper,
@@ -770,19 +795,20 @@ func NewAppKeeper(
 
 	// Create Interchain Accounts Controller Stack
 	var icaControllerStack porttypes.IBCModule
-	icaControllerStack = icacontroller.NewIBCMiddleware(icaControllerStack, app.ICAControllerKeeper)
+	icaControllerStack = icacontroller.NewIBCMiddleware(app.ICAControllerKeeper)
 	icaICS4Wrapper := icaControllerStack.(porttypes.ICS4Wrapper)
 	// Since the callbacks middleware itself is an ics4wrapper, it needs to be passed to the ica controller keeper
 	app.ICAControllerKeeper.WithICS4Wrapper(icaICS4Wrapper)
 
-	var wasmStack porttypes.IBCModule
-	wasmStack = wasm.NewIBCHandler(app.WasmKeeper, app.IBCKeeper.ChannelKeeper, app.IBCKeeper.ChannelKeeper)
+	// TODO: Re-enable WASM stack when interface compatibility is fixed
+	// var wasmStack porttypes.IBCModule
+	// wasmStack = wasm.NewIBCHandler(app.WasmKeeper, app.IBCKeeper.ChannelKeeper, app.TransferKeeper, bApp)
 	// Create IBC Router & seal
 	ibcRouter := porttypes.NewRouter().
 		AddRoute(icahosttypes.SubModuleName, icaHostStack).
 		AddRoute(icacontrollertypes.SubModuleName, icaControllerStack).
 		AddRoute(ibctransfertypes.ModuleName, transferStack).
-		AddRoute(wasmTypes.ModuleName, wasmStack).
+		// AddRoute(wasmTypes.ModuleName, wasmStack). // TODO: Re-enable when WASM compatibility is fixed
 		AddRoute(ccvconsumertypes.ModuleName, app.ConsumerModule)
 
 	app.IBCKeeper.SetRouter(ibcRouter)
@@ -876,7 +902,10 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(icacontrollertypes.SubModuleName).WithKeyTable(icacontrollertypes.ParamKeyTable())
 	paramsKeeper.Subspace(icahosttypes.SubModuleName).WithKeyTable(icahosttypes.ParamKeyTable())
 	paramsKeeper.Subspace(ccvconsumertypes.ModuleName).WithKeyTable(ccv.ParamKeyTable())
-	paramsKeeper.Subspace(ibchookstypes.ModuleName)
+
+	// EVM modules
+	paramsKeeper.Subspace(evmtypes.ModuleName)
+	paramsKeeper.Subspace(feemarkettypes.ModuleName)
 
 	// Can be removed as we are not using param subspace anymore anywhere
 	paramsKeeper.Subspace(assetprofilemoduletypes.ModuleName)

@@ -42,8 +42,22 @@ genesis:
       - base_denom: "uusdc"
         decimals: 6
         denom: "uusdc"
+        path: ""
+        ibc_channel_id: ""
+        ibc_counterparty_channel_id: ""
         display_name: "USDC"
+        display_symbol: "USDC"
+        network: ""
+        address: ""
+        external_symbol: "USDC"
+        transfer_limit: ""
+        permissions: []
+        unit_denom: "uusdc"
+        ibc_counterparty_denom: ""
+        ibc_counterparty_chain_id: ""
         authority: "elys1zypqa76je7pxsdwkfah6mu9a583sju6xqtgupc"
+        commit_enabled: true
+        withdraw_enabled: true
   consensus:
     params:
         abci:

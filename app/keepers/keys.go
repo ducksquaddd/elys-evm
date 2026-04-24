@@ -16,14 +16,16 @@ import (
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward/types"
-	ibchookstypes "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8/types"
+	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward/types"
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
-	icacontrollertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
-	icahosttypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
-	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
-	ccvconsumertypes "github.com/cosmos/interchain-security/v6/x/ccv/consumer/types"
+	icacontrollertypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/types"
+	icahosttypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ccvconsumertypes "github.com/cosmos/interchain-security/v7/x/ccv/consumer/types"
+
+	evmtypes "github.com/cosmos/evm/x/vm/types"
+	feemarkettypes "github.com/cosmos/evm/x/feemarket/types"
 
 	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	accountedpoolmoduletypes "github.com/elys-network/elys/v6/x/accountedpool/types"
@@ -63,7 +65,6 @@ func (appKeepers *AppKeepers) GenerateKeys() {
 		icahosttypes.StoreKey,
 		icacontrollertypes.StoreKey,
 		capabilitytypes.StoreKey,
-		ibchookstypes.StoreKey,
 		feegrant.StoreKey,
 		authz.ModuleName,
 		group.StoreKey,
@@ -71,6 +72,9 @@ func (appKeepers *AppKeepers) GenerateKeys() {
 		ccvconsumertypes.StoreKey,
 		wasmTypes.StoreKey,
 		packetforwardtypes.StoreKey,
+
+		evmtypes.StoreKey,
+		feemarkettypes.StoreKey,
 
 		epochsmoduletypes.StoreKey,
 		assetprofilemoduletypes.StoreKey,
@@ -91,7 +95,12 @@ func (appKeepers *AppKeepers) GenerateKeys() {
 	)
 
 	// Define transient store keys
-	appKeepers.tkeys = storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, ammmoduletypes.TStoreKey)
+	appKeepers.tkeys = storetypes.NewTransientStoreKeys(
+		paramstypes.TStoreKey,
+		ammmoduletypes.TStoreKey,
+		evmtypes.TransientKey,
+		feemarkettypes.TransientKey,
+	)
 
 	// MemKeys are for information that is stored only in RAM.
 	appKeepers.memKeys = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)

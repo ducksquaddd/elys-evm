@@ -6,8 +6,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
-	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
-	consumerante "github.com/cosmos/interchain-security/v6/app/consumer/ante"
+	ibcante "github.com/cosmos/ibc-go/v10/modules/core/ante"
+	consumerante "github.com/cosmos/interchain-security/v7/app/consumer/ante"
 )
 
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
@@ -46,7 +46,8 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 
 	txFeeChecker := options.TxFeeChecker
 	if txFeeChecker == nil {
-		txFeeChecker = CheckTxFeeWithValidatorMinGasPrices
+		// Use EVM-aware fee checker that handles ELYS as native gas token
+		txFeeChecker = NewDynamicFeeChecker(options.FeeMarketKeeper)
 	}
 
 	anteDecorators := []sdk.AnteDecorator{

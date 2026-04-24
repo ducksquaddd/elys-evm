@@ -2,13 +2,14 @@ package ante
 
 import (
 	corestoretypes "cosmossdk.io/core/store"
-	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	wasm "github.com/CosmWasm/wasmd/x/wasm"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
-	ibcconsumerkeeper "github.com/cosmos/interchain-security/v6/x/ccv/consumer/keeper"
+	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
+	ibcconsumerkeeper "github.com/cosmos/interchain-security/v7/x/ccv/consumer/keeper"
+	feemarketkeeper "github.com/cosmos/evm/x/feemarket/keeper"
 	parameterkeeper "github.com/elys-network/elys/v6/x/parameter/keeper"
 )
 
@@ -22,7 +23,8 @@ type HandlerOptions struct {
 	StakingKeeper         *stakingkeeper.Keeper
 	ConsumerKeeper        ibcconsumerkeeper.Keeper
 	BankKeeper            bankkeeper.Keeper
+	FeeMarketKeeper       feemarketkeeper.Keeper
 	ParameterKeeper       parameterkeeper.Keeper
-	WasmConfig            *wasmTypes.WasmConfig
+	WasmConfig            *wasm.Config
 	TXCounterStoreService corestoretypes.KVStoreService
 }

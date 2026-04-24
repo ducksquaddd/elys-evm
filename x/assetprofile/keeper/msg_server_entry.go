@@ -9,7 +9,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"github.com/elys-network/elys/v6/x/assetprofile/types"
 )
 
@@ -34,11 +34,11 @@ func (k msgServer) UpdateEntry(goCtx context.Context, msg *types.MsgUpdateEntry)
 	// check the validity of ibc denom & channel
 	hash, err := ibctransfertypes.ParseHexHash(strings.TrimPrefix(msg.Denom, "ibc/"))
 	if err == nil && k.transferKeeper != nil {
-		denomTrace, ok := k.transferKeeper.GetDenomTrace(ctx, hash)
+		denom, ok := k.transferKeeper.GetDenom(ctx, hash)
 		if !ok {
 			return nil, types.ErrNotValidIbcDenom
 		}
-		if !strings.Contains(denomTrace.Path, msg.IbcChannelId) {
+		if !strings.Contains(denom.Path(), msg.IbcChannelId) {
 			return nil, types.ErrChannelIdAndDenomHashMismatch
 		}
 	}

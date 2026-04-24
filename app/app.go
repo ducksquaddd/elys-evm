@@ -19,6 +19,9 @@ import (
 	stablestaketypes "github.com/elys-network/elys/v6/x/stablestake/types"
 	"github.com/spf13/cast"
 
+	// EVM-Bank integration
+	"github.com/cosmos/evm/rpc"
+
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmos "github.com/cometbft/cometbft/libs/os"
 
@@ -57,7 +60,7 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	ccvconsumertypes "github.com/cosmos/interchain-security/v6/x/ccv/consumer/types"
+	ccvconsumertypes "github.com/cosmos/interchain-security/v7/x/ccv/consumer/types"
 	"github.com/elys-network/elys/v6/app/ante"
 	oracleabci "github.com/ojo-network/ojo/x/oracle/abci"
 
@@ -139,11 +142,11 @@ func NewElysApp(
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) *ElysApp {
 
+	// Use standard Cosmos encoding (not EVM encoding) to keep validators as Cosmos-native
+	// EVM compatibility will be provided through precompiles only
 	encodingConfig := MakeEncodingConfig()
-	appCodec := encodingConfig.Marshaler
-	legacyAmino := encodingConfig.Amino
+	appCodec, legacyAmino, txConfig := encodingConfig.Marshaler, encodingConfig.Amino, encodingConfig.TxConfig
 	interfaceRegistry := encodingConfig.InterfaceRegistry
-	txConfig := encodingConfig.TxConfig
 
 	skipGenesisInvariants := cast.ToBool(appOpts.Get(crisis.FlagSkipGenesisInvariants))
 	invCheckPeriod := cast.ToUint(appOpts.Get(server.FlagInvCheckPeriod))
@@ -165,8 +168,9 @@ func NewElysApp(
 	}
 	bApp.SetVersion(version.Version)
 
-	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
+	bApp.SetTxDecoder(txConfig.TxDecoder())
+	bApp.SetInterfaceRegistry(interfaceRegistry)
 
 	app := &ElysApp{
 		BaseApp:           bApp,
@@ -195,6 +199,11 @@ func NewElysApp(
 		wasmOpts,
 	)
 
+	// set up our EVM coin info (uelys→ELYS @6dp)
+	if err := EVMAppOptions(bApp.ChainID()); err != nil {
+		panic(err)
+	}
+
 	// NOTE: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.
 	app.mm = module.NewManager(appModules(app, appCodec, txConfig, skipGenesisInvariants)...)
@@ -219,6 +228,7 @@ func NewElysApp(
 	// NOTE: upgrade module is required to be prioritized
 	app.mm.SetOrderPreBlockers(
 		upgradetypes.ModuleName,
+		authtypes.ModuleName,
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -294,7 +304,7 @@ func NewElysApp(
 	app.MountTransientStores(app.GetTransientStoreKey())
 	app.MountMemoryStores(app.GetMemoryStoreKey())
 
-	wasmConfig, err := wasm.ReadWasmConfig(appOpts)
+	wasmConfig, err := wasm.ReadNodeConfig(appOpts)
 	if err != nil {
 		panic(fmt.Sprintf("error while reading wasm config: %s", err))
 	}
@@ -308,10 +318,11 @@ func NewElysApp(
 				FeegrantKeeper:  app.FeeGrantKeeper,
 				SignModeHandler: txConfig.SignModeHandler(),
 				SigGasConsumer:  sdkante.DefaultSigVerificationGasConsumer,
-				TxFeeChecker:    ante.CheckTxFeeWithValidatorMinGasPrices,
+				// TxFeeChecker will be set by NewAnteHandler to use EVM-aware fee checker
 			},
 
 			BankKeeper:            app.BankKeeper,
+			FeeMarketKeeper:       app.FeeMarketKeeper,
 			ParameterKeeper:       app.ParameterKeeper,
 			Cdc:                   appCodec,
 			IBCKeeper:             app.IBCKeeper,
@@ -348,8 +359,14 @@ func NewElysApp(
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetEndBlocker(app.EndBlocker)
 
+	// ELYS: Setup EVM-Bank integration using clean module pattern
+	app.SetupEVMBankIntegration()
+
 	app.setUpgradeHandler()
 	app.setUpgradeStore()
+
+	// Check and set EVM parameters on startup if needed
+	app.checkAndSetEVMParams()
 
 	// At startup, after all modules have been registered, check that all prot
 	// annotations are correct.
@@ -398,6 +415,9 @@ func (app *ElysApp) Name() string { return app.BaseApp.Name() }
 
 // BeginBlocker application updates every begin block
 func (app *ElysApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
+	// Ensure EVM parameters are set on first block if needed
+	app.ensureEVMParams(ctx)
+
 	return app.mm.BeginBlock(ctx)
 }
 
@@ -605,4 +625,64 @@ func (app *ElysApp) GetBaseApp() *baseapp.BaseApp {
 // GetTxConfig implements the TestingApp interface.
 func (app *ElysApp) GetTxConfig() client.TxConfig {
 	return app.txConfig
+}
+
+// SetupEVMBankIntegration configures the EVM RPC to use the bank module for balance queries
+// This enables eth_getBalance to return actual uelys balances instead of 0
+func (app *ElysApp) SetupEVMBankIntegration() {
+	app.Logger().Info("🚀 Starting EVM-Bank integration setup...")
+
+	// Validate bank keeper is available
+	if app.BankKeeper == nil {
+		app.Logger().Error("EVM-Bank integration failed: bank keeper is nil")
+		return
+	}
+	app.Logger().Info("✅ Bank keeper is available")
+
+	// Get base denomination from config
+	baseDenom := BaseDenom
+	if baseDenom == "" {
+		app.Logger().Error("EVM-Bank integration failed: base denomination is empty")
+		return
+	}
+	app.Logger().Info("✅ Base denomination found", "base_denom", baseDenom)
+
+	// Validate base denomination format
+	if len(baseDenom) == 0 || baseDenom[0] != 'u' {
+		app.Logger().Error("EVM-Bank integration failed: invalid base denomination format", "base_denom", baseDenom)
+		return
+	}
+	app.Logger().Info("✅ Base denomination format is valid")
+
+	// Create a secure query context factory for direct keeper calls
+	app.Logger().Info("🔧 Creating query context factory...")
+	queryCtxFactory := func(height int64) sdk.Context {
+		// Create a read-only context for the specified height
+		// This gives access to stores but limits it to queries only
+		if height <= 0 {
+			// Use latest height if not specified
+			height = app.LastBlockHeight()
+		}
+
+		// Create a query context with the specified height
+		// Use the correct NewContext signature (checkTx bool only)
+		ctx := app.BaseApp.NewContext(true) // true = checkTx mode (read-only)
+		ctx = ctx.WithBlockHeight(height)
+		app.Logger().Debug("Created query context", "height", height)
+		return ctx
+	}
+	app.Logger().Info("✅ Query context factory created")
+
+	// Configure the EVM RPC with bank keeper, base denomination, and context factory
+	app.Logger().Info("🔧 Calling rpc.SetupEVMRPC...")
+	err := rpc.SetupEVMRPC(app.BankKeeper, baseDenom, queryCtxFactory)
+	if err != nil {
+		app.Logger().Error("EVM-Bank integration failed", "error", err)
+		return
+	}
+	app.Logger().Info("✅ rpc.SetupEVMRPC completed successfully")
+
+	app.Logger().Info("🎉 EVM-Bank integration configured successfully",
+		"base_denom", baseDenom,
+		"message", "eth_getBalance will use bank module")
 }

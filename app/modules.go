@@ -7,10 +7,18 @@ import (
 	feegrantmodule "cosmossdk.io/x/feegrant/module"
 	"cosmossdk.io/x/upgrade"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
-	"github.com/CosmWasm/wasmd/x/wasm"
-	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
+
+	// "github.com/CosmWasm/wasmd/x/wasm" // Temporarily disabled due to IBC v10 compatibility issues
+	// wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types" // Temporarily disabled due to IBC v10 compatibility issues
+
+	"github.com/cosmos/evm/x/feemarket"
+	evm "github.com/cosmos/evm/x/vm"
+	evmtypes "github.com/cosmos/evm/x/vm/types"
+
+	// "github.com/cosmos/evm/x/feemarket" // Temporarily disabled
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	authsims "github.com/cosmos/cosmos-sdk/x/auth/simulation"
@@ -42,21 +50,21 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward"
-	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8/packetforward/types"
-	ibchooks "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8"
-	ibchookstypes "github.com/cosmos/ibc-apps/modules/ibc-hooks/v8/types"
+	feemarkettypes "github.com/cosmos/evm/x/feemarket/types"
+	"github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward"
+	packetforwardtypes "github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v10/packetforward/types"
 	"github.com/cosmos/ibc-go/modules/capability"
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
-	ica "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts"
-	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
-	"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
-	ibc "github.com/cosmos/ibc-go/v8/modules/core"
-	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
-	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
-	ccvconsumertypes "github.com/cosmos/interchain-security/v6/x/ccv/consumer/types"
-	ccvstaking "github.com/cosmos/interchain-security/v6/x/ccv/democracy/staking"
+	ica "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts"
+	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
+	"github.com/cosmos/ibc-go/v10/modules/apps/transfer"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	ibc "github.com/cosmos/ibc-go/v10/modules/core"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
+	ccvconsumertypes "github.com/cosmos/interchain-security/v7/x/ccv/consumer/types"
+	ccvstaking "github.com/cosmos/interchain-security/v7/x/ccv/democracy/staking"
 	accountedpoolmodule "github.com/elys-network/elys/v6/x/accountedpool"
 	accountedpoolmoduletypes "github.com/elys-network/elys/v6/x/accountedpool/types"
 	ammmodule "github.com/elys-network/elys/v6/x/amm"
@@ -97,7 +105,6 @@ var maccPerms = map[string][]string{
 	authtypes.FeeCollectorName:                    nil,
 	distrtypes.ModuleName:                         nil,
 	icatypes.ModuleName:                           nil,
-	ibchookstypes.ModuleName:                      nil,
 	stakingtypes.BondedPoolName:                   {authtypes.Burner, authtypes.Staking},
 	stakingtypes.NotBondedPoolName:                {authtypes.Burner, authtypes.Staking},
 	govtypes.ModuleName:                           {authtypes.Burner},
@@ -113,7 +120,9 @@ var maccPerms = map[string][]string{
 	ammmoduletypes.ModuleName:        {authtypes.Minter, authtypes.Burner, authtypes.Staking},
 	stablestaketypes.ModuleName:      {authtypes.Minter, authtypes.Burner},
 	masterchefmoduletypes.ModuleName: {authtypes.Minter, authtypes.Burner},
-	wasmTypes.ModuleName:             {authtypes.Burner},
+	// wasmTypes.ModuleName:             {authtypes.Burner}, // Temporarily disabled due to IBC v10 compatibility issues
+	evmtypes.ModuleName:              {authtypes.Minter, authtypes.Burner},
+	feemarkettypes.ModuleName:        nil,
 }
 
 func appModules(
@@ -149,14 +158,13 @@ func appModules(
 		evidence.NewAppModule(app.EvidenceKeeper),
 		consensus.NewAppModule(appCodec, app.ConsensusParamsKeeper),
 		ibc.NewAppModule(app.IBCKeeper),
-		ibctm.NewAppModule(),
+		ibctm.NewAppModule(ibctm.NewLightClientModule(appCodec, clienttypes.NewStoreProvider(runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey))))),
 		params.NewAppModule(app.ParamsKeeper),
 		transfer.NewAppModule(*app.TransferKeeper),
 		ica.NewAppModule(&app.ICAControllerKeeper, &app.ICAHostKeeper),
 		app.ConsumerModule, // Not defining it here directly because ConsumerModule needed for IBC router
-		ibchooks.NewAppModule(app.AccountKeeper),
 		packetforward.NewAppModule(app.PacketForwardKeeper, app.GetSubspace(packetforwardtypes.ModuleName)),
-		wasm.NewAppModule(appCodec, &app.WasmKeeper, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, app.MsgServiceRouter(), app.GetSubspace(wasmTypes.ModuleName)),
+		// wasm.NewAppModule(appCodec, &app.WasmKeeper, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, app.MsgServiceRouter(), app.GetSubspace(wasmTypes.ModuleName)), // Temporarily disabled due to IBC v10 compatibility issues
 		epochsmodule.NewAppModule(appCodec, *app.EpochsKeeper),
 		assetprofilemodule.NewAppModule(appCodec, app.AssetprofileKeeper, app.AccountKeeper, app.BankKeeper),
 		oraclemodule.NewAppModule(appCodec, app.OracleKeeper, app.AccountKeeper, app.BankKeeper),
@@ -173,6 +181,8 @@ func appModules(
 		perpetualmodule.NewAppModule(appCodec, app.PerpetualKeeper, app.AccountKeeper, app.BankKeeper),
 		tiermodule.NewAppModule(appCodec, *app.TierKeeper, app.AccountKeeper, app.BankKeeper),
 		tradeshieldmodule.NewAppModule(appCodec, app.TradeshieldKeeper, app.AccountKeeper, app.BankKeeper),
+		evm.NewAppModule(app.EVMKeeper, app.AccountKeeper, app.AccountKeeper.AddressCodec()),
+		feemarket.NewAppModule(app.FeeMarketKeeper),
 	}
 }
 
@@ -286,8 +296,9 @@ func orderBeginBlockers() []string {
 		estakingmoduletypes.ModuleName,
 		tiermoduletypes.ModuleName,
 		tradeshieldmoduletypes.ModuleName,
-		wasmTypes.ModuleName,
-		ibchookstypes.ModuleName,
+		// wasmTypes.ModuleName, // Temporarily disabled due to IBC v10 compatibility issues
+		feemarkettypes.ModuleName, // Re-enabled for ELYS-EVM
+		evmtypes.ModuleName,
 	}
 }
 
@@ -339,8 +350,9 @@ func orderEndBlockers() []string {
 		estakingmoduletypes.ModuleName,
 		tiermoduletypes.ModuleName,
 		tradeshieldmoduletypes.ModuleName,
-		wasmTypes.ModuleName,
-		ibchookstypes.ModuleName,
+		// wasmTypes.ModuleName, // Temporarily disabled due to IBC v10 compatibility issues
+		evmtypes.ModuleName,
+		feemarkettypes.ModuleName, // Re-enabled for ELYS-EVM
 
 		// Must be called after estaking and masterchef
 		ccvconsumertypes.ModuleName,
@@ -368,6 +380,8 @@ func orderInitBlockers() []string {
 		stablestaketypes.ModuleName,
 		stakingtypes.ModuleName,
 		slashingtypes.ModuleName,
+		evmtypes.ModuleName,
+		feemarkettypes.ModuleName,
 		genutiltypes.ModuleName,
 		ibcexported.ModuleName,
 		icatypes.ModuleName,
@@ -394,9 +408,7 @@ func orderInitBlockers() []string {
 		tiermoduletypes.ModuleName,
 		tradeshieldmoduletypes.ModuleName,
 		// wasm after ibc transfer
-		wasmTypes.ModuleName,
-		// ibc_hooks after auth keeper
-		ibchookstypes.ModuleName,
+		// wasmTypes.ModuleName, // Temporarily disabled due to IBC v10 compatibility issues
 		packetforwardtypes.ModuleName,
 		// crisis needs to be last so that the genesis state is consistent
 		// when it checks invariants

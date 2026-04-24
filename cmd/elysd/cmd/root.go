@@ -45,6 +45,13 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	// EVM server imports
+	evmcmd "github.com/cosmos/evm/client"
+	evmkeyring "github.com/cosmos/evm/crypto/keyring"
+	evmserver "github.com/cosmos/evm/server"
+	evmserverconfig "github.com/cosmos/evm/server/config"
+	srvflags "github.com/cosmos/evm/server/flags"
+
 	// this line is used by starport scaffolding # root/moduleImport
 
 	"github.com/elys-network/elys/v6/app"
@@ -87,7 +94,8 @@ func NewRootCmd() *cobra.Command {
 		WithInput(os.Stdin).
 		WithAccountRetriever(types.AccountRetriever{}).
 		WithHomeDir(app.DefaultNodeHome).
-		WithViper("")
+		WithViper("").
+		WithKeyringOptions(evmkeyring.Option())
 
 	rootCmd := &cobra.Command{
 		Use:   app.Name + "d",
@@ -199,7 +207,12 @@ func initRootCmd(rootCmd *cobra.Command,
 	// Adding cmd to make GitHub workflows upgrades work
 	rootCmd.AddCommand(SoftwareUpgradeTxCmd())
 
-	server.AddCommands(rootCmd, app.DefaultNodeHome, ac.newApp, ac.appExport, addModuleInitFlags)
+	evmserver.AddCommands(
+		rootCmd,
+		evmserver.NewDefaultStartOptions(ac.newApp, app.DefaultNodeHome),
+		ac.appExport,
+		addModuleInitFlags,
+	)
 
 	// add keybase, auxiliary RPC, query, and tx child commands
 	rootCmd.AddCommand(
@@ -208,10 +221,18 @@ func initRootCmd(rootCmd *cobra.Command,
 		queryCommand(basicManager),
 		txCommand(basicManager),
 		keys.Commands(),
+		evmcmd.KeyCommands(app.DefaultNodeHome, true),
 	)
 
 	rootCmd.PersistentFlags().String(pricefeeder.FlagLogLevel, "error", "Log level of price feeder process")
 	rootCmd.PersistentFlags().Bool(pricefeeder.FlagEnablePriceFeeder, true, "Enable the price feeder")
+
+	// Add EVM tx flags
+	var err error
+	rootCmd, err = srvflags.AddTxFlags(rootCmd)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func addModuleInitFlags(startCmd *cobra.Command) {
@@ -392,7 +413,10 @@ func initAppConfig() (string, interface{}) {
 
 	type CustomAppConfig struct {
 		serverconfig.Config
-		PriceFeeder pricefeeder.AppConfig `mapstructure:"pricefeeder"`
+		PriceFeeder pricefeeder.AppConfig         `mapstructure:"pricefeeder"`
+		EVM         evmserverconfig.EVMConfig     `mapstructure:"evm"`
+		JSONRPC     evmserverconfig.JSONRPCConfig `mapstructure:"json-rpc"`
+		TLS         evmserverconfig.TLSConfig     `mapstructure:"tls"`
 	}
 
 	// Optionally allow the chain developer to overwrite the SDK's default
@@ -418,7 +442,10 @@ func initAppConfig() (string, interface{}) {
 			Enable:   true,
 			LogLevel: "info",
 		},
+		EVM:     *evmserverconfig.DefaultEVMConfig(),
+		JSONRPC: *evmserverconfig.DefaultJSONRPCConfig(),
+		TLS:     *evmserverconfig.DefaultTLSConfig(),
 	}
-	customAppTemplate := serverconfig.DefaultConfigTemplate + pricefeeder.DefaultConfigTemplate
+	customAppTemplate := serverconfig.DefaultConfigTemplate + pricefeeder.DefaultConfigTemplate + evmserverconfig.DefaultEVMConfigTemplate
 	return customAppTemplate, customAppConfig
 }

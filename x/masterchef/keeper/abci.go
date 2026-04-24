@@ -8,7 +8,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	ccvconsumertypes "github.com/cosmos/interchain-security/v6/x/ccv/consumer/types"
+	ccvconsumertypes "github.com/cosmos/interchain-security/v7/x/ccv/consumer/types"
 	ammkeeper "github.com/elys-network/elys/v6/x/amm/keeper"
 	ammtypes "github.com/elys-network/elys/v6/x/amm/types"
 	assetprofiletypes "github.com/elys-network/elys/v6/x/assetprofile/types"
